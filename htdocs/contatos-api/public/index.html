@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CRUD Contatos</title>
+  <style>
+    body{font-family:Arial;margin:20px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border:1px solid #ddd;padding:8px}
+    th{background:#f4f4f4}
+    form{margin-top:10px}
+  </style>
+</head>
+<body>
+  <h1>CRUD Contatos</h1>
+
+  <form id="form">
+    <input type="hidden" id="id" />
+    <div>
+      <label>API Key: <input type="text" id="apiKey" placeholder="Cole sua API Key aqui"></label>
+    </div>
+    <div>
+      <label>Nome: <input type="text" id="nome" required></label>
+    </div>
+    <div>
+      <label>Email: <input type="email" id="email" required></label>
+    </div>
+    <div>
+      <label>Telefone: <input type="text" id="telefone"></label>
+    </div>
+    <div>
+      <label>Mensagem: <input type="text" id="mensagem"></label>
+    </div>
+    <div>
+      <button type="submit">Salvar</button>
+      <button type="button" id="limpar">Limpar</button>
+    </div>
+  </form>
+
+  <input id="search" placeholder="Buscar por nome ou email" />
+  <button id="btnSearch">Buscar</button>
+  <button id="btnLoad">Carregar todos</button>
+
+  <table id="table">
+    <thead>
+      <tr><th>ID</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Mensagem</th><th>Ações</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const baseUrl = window.location.origin + '/contatos-api';
+
+    function headersWithKey(){
+      const key = document.getElementById('apiKey').value.trim();
+      const h = {'Content-Type':'application/json'};
+      if (key) h['X-API-KEY'] = key;
+      return h;
+    }
+
+    async function loadAll(){
+      const res = await fetch(baseUrl + '/api/contatos');
+      const json = await res.json();
+      renderTable(json.dados || []);
+    }
+
+    function renderTable(items){
+      const tbody = document.querySelector('#table tbody');
+      tbody.innerHTML = '';
+      items.forEach(it => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${it.id}</td><td>${it.nome}</td><td>${it.email}</td><td>${it.telefone||''}</td><td>${it.mensagem||''}</td><td><button data-id="${it.id}" class="edit">Editar</button> <button data-id="${it.id}" class="del">Excluir</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('btnLoad').addEventListener('click', loadAll);
+
+    document.getElementById('form').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const id = document.getElementById('id').value;
+      const payload = {
+        nome: document.getElementById('nome').value,
+        email: document.getElementById('email').value,
+        telefone: document.getElementById('telefone').value,
+        mensagem: document.getElementById('mensagem').value
+      };
+      let res;
+      if (id) {
+        res = await fetch(baseUrl + '/api/contatos/' + id, {method:'PUT',headers:headersWithKey(),body:JSON.stringify(payload)});
+      } else {
+        res = await fetch(baseUrl + '/api/contatos', {method:'POST',headers:headersWithKey(),body:JSON.stringify(payload)});
+      }
+      const json = await res.json();
+      alert(json.mensagem || 'OK');
+      clearForm();
+      loadAll();
+    });
+
+    document.getElementById('limpar').addEventListener('click', clearForm);
+
+    function clearForm(){
+      document.getElementById('id').value='';
+      document.getElementById('nome').value='';
+      document.getElementById('email').value='';
+      document.getElementById('telefone').value='';
+      document.getElementById('mensagem').value='';
+    }
+
+    document.querySelector('#table tbody').addEventListener('click', async e=>{
+      if (e.target.classList.contains('edit')){
+        const id = e.target.dataset.id;
+        const res = await fetch(baseUrl + '/api/contatos/' + id, {headers: headersWithKey()});
+        const json = await res.json();
+        const d = json.dados;
+        document.getElementById('id').value = d.id;
+        document.getElementById('nome').value = d.nome;
+        document.getElementById('email').value = d.email;
+        document.getElementById('telefone').value = d.telefone || '';
+        document.getElementById('mensagem').value = d.mensagem || '';
+      }
+      if (e.target.classList.contains('del')){
+        if (!confirm('Deseja deletar este contato?')) return;
+        const id = e.target.dataset.id;
+        const res = await fetch(baseUrl + '/api/contatos/' + id, {method:'DELETE', headers: headersWithKey()});
+        const json = await res.json();
+        alert(json.mensagem || 'OK');
+        loadAll();
+      }
+    });
+
+    document.getElementById('btnSearch').addEventListener('click', async ()=>{
+      const q = document.getElementById('search').value.trim();
+      if (!q) return loadAll();
+      // buscar por nome e email (API usa /buscar?nome= ou ?email=)
+      let res = await fetch(baseUrl + '/api/buscar?nome=' + encodeURIComponent(q));
+      let json = await res.json();
+      if ((json.dados || []).length === 0){
+        res = await fetch(baseUrl + '/api/buscar?email=' + encodeURIComponent(q));
+        json = await res.json();
+      }
+      renderTable(json.dados || []);
+    });
+
+    // carregar inicial
+    loadAll();
+  </script>
+</body>
+</html>
